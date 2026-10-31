@@ -1,0 +1,394 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>this is a pen</title>
+<meta property="og:title" content="this is a pen.">
+<meta property="og:description" content="無印良品・三菱鉛筆の替芯が入るペン軸を、くびれとねじれで作って3MFで書き出すジェネレータ">
+<meta property="og:image" content="https://y-morishita-biz.github.io/isthisapen/og.png">
+<meta property="og:url" content="https://y-morishita-biz.github.io/isthisapen/">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="theme-color" content="#D8E021">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%23D8E021'/%3E%3Crect x='5' y='14' width='22' height='4' rx='2' fill='%231B200C'/%3E%3C/svg%3E">
+<meta name="description" content="無印良品のゲルインキ替芯が入るペン軸を、くびれとねじれで作って3MFで書き出すジェネレータ">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Instrument+Sans:wght@400;500;600&family=Zen+Kaku+Gothic+New:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* 広告のような一枚もの: 黄緑の地にペンを横に積み、左下に段々の見出し。その下で作る・印刷する */
+:root {
+  --bg: #D8E021;
+  --bg-2: #CDD51C;
+  --ink: #1B200C;
+  --ink-2: #3F4720;
+  --rule: rgba(27, 32, 12, .28);
+  --rule-strong: rgba(27, 32, 12, .7);
+  --stage: transparent;
+  --chip: rgba(27, 32, 12, .06);
+  --btn: #1B200C;
+  --btn-ink: #E3E95C;
+  --warn: #8A2D12;
+  --ok: #1B200C;
+  --serif: "Instrument Serif", "Times New Roman", "Hiragino Mincho ProN", serif;
+  --sans: "Instrument Sans", "Zen Kaku Gothic New", "Hiragino Sans", "Yu Gothic", system-ui, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  --gutter: max(16px, env(safe-area-inset-left, 0px));
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #161B08; --bg-2: #1D2309; --ink: #E3EA5A; --ink-2: #B9C05A;
+    --rule: rgba(227, 234, 90, .25); --rule-strong: rgba(227, 234, 90, .65);
+    --stage: transparent; --chip: rgba(227, 234, 90, .08); --btn: #E3EA5A; --btn-ink: #161B08;
+    --warn: #FF9B73; --ok: #E3EA5A; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #161B08; --bg-2: #1D2309; --ink: #E3EA5A; --ink-2: #B9C05A;
+  --rule: rgba(227, 234, 90, .25); --rule-strong: rgba(227, 234, 90, .65);
+  --stage: transparent; --chip: rgba(227, 234, 90, .08); --btn: #E3EA5A; --btn-ink: #161B08;
+  --warn: #FF9B73; --ok: #E3EA5A; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; scroll-padding-top: 64px; }
+body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--sans); font-size: 15px; line-height: 1.6; -webkit-font-smoothing: antialiased; }
+.wrap { max-width: 1240px; margin: 0 auto; padding-inline: var(--gutter); }
+a { color: inherit; }
+button { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--ink); outline-offset: 3px; }
+.serif { font-family: var(--serif); font-weight: 400; letter-spacing: -.01em; }
+.mono { font-family: var(--mono); font-feature-settings: "tnum"; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+/* ---- 上の帯 ---- */
+.top { position: sticky; top: 0; z-index: 20; background: var(--bg); }
+.top .wrap { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; padding-block: 12px; }
+.mark { font-family: var(--serif); font-size: 26px; line-height: 1; text-decoration: none; }
+.top nav { display: flex; gap: 20px; font-size: 14px; }
+.top nav a { text-decoration: none; }
+.top nav a:hover { text-decoration: underline; text-underline-offset: 4px; }
+
+/* ---- ペンの並び(ヒーロー): 1画面にペンの束と段々の見出しを収める ---- */
+.hero { --ph: min(calc((100svh - 56px) * .56 / 4.9), 16vw); min-height: calc(100svh - 50px); display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: 1fr auto; padding-top: 8px; }
+.stack { position: relative; overflow-x: clip; margin-inline: calc(50% - 50vw); align-self: center; }
+.models { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; align-items: center; }
+.models li { --shift: 0%; height: var(--ph); margin-top: calc(var(--ph) * -.32); transform: translateX(var(--shift)); }
+.models li:first-child { margin-top: 0; }
+.models li:nth-child(odd) { --shift: -14%; }
+.models li:nth-child(even) { --shift: 12%; }
+.models li:nth-child(3n) { --shift: -4%; }
+.model { display: block; height: 100%; padding: 0; border: 0; background: none; cursor: pointer; }
+.model img { display: block; height: 100%; width: auto; aspect-ratio: 10 / 1; transition: transform .35s cubic-bezier(.2,.7,.2,1), filter .2s; }
+.model:hover img, .model:focus-visible img { transform: translateX(-2%) translateY(-3%); filter: drop-shadow(0 6px 6px rgba(27,32,12,.25)); }
+.model img { opacity: 1; }
+.model img:not([src]) { opacity: 0; }
+@media (prefers-reduced-motion: no-preference) { .model img[src] { animation: slidein .6s cubic-bezier(.2,.7,.2,1) both; } }
+@keyframes slidein { from { opacity: 0; translate: -4% 0; } }
+.pick { position: absolute; right: max(var(--gutter), calc(50vw - 620px + var(--gutter))); bottom: 0; margin: 0; text-align: right; font-size: 12px; color: var(--ink-2); pointer-events: none; }
+.pick b { display: block; font-family: var(--serif); font-style: italic; font-weight: 400; font-size: 26px; line-height: 1.1; color: var(--ink); }
+
+.intro { display: grid; grid-template-columns: 1.6fr 1fr; gap: 20px 48px; align-items: end; padding-block: 12px 36px; }
+.stair { margin: 0; font-family: var(--serif); font-weight: 400; font-size: clamp(64px, min(12.5vw, 13svh), 200px); line-height: .8; letter-spacing: -.045em; }
+.stair span { display: block; }
+.stair span:nth-child(2) { padding-left: .75em; }
+.stair span:nth-child(3) { padding-left: 1.5em; }
+.intro .copy { max-width: 400px; font-size: 14px; }
+.intro .copy p { margin: 0 0 10px; }
+.need { font-size: 12px; color: var(--ink-2); margin: 10px 0 0 !important; }
+.facts { display: grid; grid-template-columns: repeat(3, auto); justify-content: start; gap: 4px 24px; margin: 12px 0 18px; padding: 12px 0 0; border-top: 1px solid var(--rule); font-size: 12px; }
+.facts dt { color: var(--ink-2); }
+.facts dd { margin: 0; font-family: var(--mono); font-size: 13px; }
+.cta { display: inline-flex; align-items: center; gap: 10px; padding: 12px 20px; border-radius: 999px; background: var(--btn); color: var(--btn-ink); text-decoration: none; font-weight: 600; }
+
+/* ---- 作る ---- */
+.make { border-top: 1px solid var(--rule-strong); padding-block: 28px 56px; }
+.make { scroll-margin-top: 50px; }
+.verdict { display: grid; grid-template-columns: 1fr auto; gap: 8px 24px; align-items: end; margin-bottom: 16px; }
+.verdict h2 { margin: 0; font-family: var(--serif); font-weight: 400; font-size: clamp(44px, 6.4vw, 92px); line-height: .95; letter-spacing: -.03em; min-height: 1em; }
+.verdict h2 .q { display: inline-block; animation: wob 1.1s ease-in-out infinite; transform-origin: 50% 80%; }
+@keyframes wob { 50% { transform: rotate(14deg); } }
+.verdict h2.no { text-decoration: line-through; text-decoration-thickness: 3px; }
+.sentence { margin: 0; font-family: var(--serif); font-style: italic; font-size: 22px; line-height: 1.25; }
+.sentenceJa { margin: 2px 0 0; font-size: 13px; color: var(--ink-2); }
+.verdict .model-now { text-align: right; font-size: 12px; color: var(--ink-2); }
+.verdict .model-now b { display: block; font-family: var(--serif); font-style: italic; font-weight: 400; font-size: 30px; color: var(--ink); line-height: 1; }
+
+.studio { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 24px; align-items: start; }
+.stage { position: sticky; top: 72px; }
+.viewer { position: relative; height: min(60vh, 540px); min-height: 300px; background: var(--stage); border: 1px solid var(--rule); border-radius: 2px; overflow: hidden; touch-action: none; }
+.viewer canvas { display: block; width: 100%; height: 100%; }
+.views { position: absolute; top: 12px; left: 12px; display: flex; gap: 4px; }
+.views button, .chips button { padding: 5px 10px; border: 1px solid var(--rule-strong); border-radius: 2px; background: transparent; font-size: 12.5px; letter-spacing: .02em; cursor: pointer; }
+.views { background: var(--bg); }
+.chips .ghost { border-style: dashed; }
+.views button[aria-pressed="true"], .chips button[aria-pressed="true"] { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+.hint { position: absolute; left: 12px; bottom: 10px; font-size: 11px; color: var(--ink-2); }
+.hud { position: absolute; right: 12px; bottom: 10px; text-align: right; font-size: 11px; color: var(--ink-2); }
+.hud .mono { font-size: 12px; color: var(--ink); }
+
+.panel { display: grid; gap: 0; }
+.group { border-top: 1px solid var(--rule-strong); padding: 14px 0 16px; }
+.group > h3 { display: flex; align-items: baseline; justify-content: space-between; margin: 0 0 10px; font-family: var(--serif); font-weight: 400; font-size: 28px; line-height: 1; }
+.group > h3 small { font-family: var(--sans); font-size: 12px; color: var(--ink-2); }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.row { display: grid; grid-template-columns: 76px 1fr 56px; align-items: center; gap: 10px; margin-top: 8px; font-size: 13px; }
+.row[hidden] { display: none; }
+.row output { font-family: var(--mono); font-size: 12px; text-align: right; }
+.row .ends { grid-column: 2; display: flex; justify-content: space-between; margin-top: -8px; font-size: 10px; color: var(--ink-2); }
+.note { margin: 8px 0 0; font-size: 12px; color: var(--ink-2); }
+input[type="range"] { -webkit-appearance: none; appearance: none; width: 100%; height: 24px; background: transparent; margin: 0; }
+input[type="range"]::-webkit-slider-runnable-track { height: 2px; background: var(--ink); }
+input[type="range"]::-moz-range-track { height: 2px; background: var(--ink); }
+input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 18px; height: 18px; margin-top: -8px; border-radius: 50%; background: var(--bg); border: 2px solid var(--ink); }
+input[type="range"]::-moz-range-thumb { width: 14px; height: 14px; border-radius: 50%; background: var(--bg); border: 2px solid var(--ink); }
+input[type="range"]:focus-visible { outline: none; }
+input[type="range"]:disabled { opacity: .35; }
+input[type="range"]:focus-visible::-webkit-slider-thumb { background: var(--ink); }
+.swatches { display: flex; flex-wrap: wrap; gap: 8px; }
+.swatch { position: relative; width: 30px; height: 30px; border-radius: 50%; border: 1px solid var(--rule-strong); background: var(--sw); cursor: pointer; padding: 0; }
+.swatch.clear { background: linear-gradient(135deg, color-mix(in srgb, var(--sw) 55%, transparent) 0 50%, color-mix(in srgb, var(--sw) 25%, white) 50% 100%); }
+.swatch[aria-pressed="true"] { box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--ink); }
+.colorName { margin: 8px 0 0; font-size: 13px; }
+details.more { border-top: 1px solid var(--rule-strong); padding: 12px 0; }
+details.more summary { cursor: pointer; font-size: 14px; list-style: none; display: flex; justify-content: space-between; }
+details.more summary::after { content: "+"; font-family: var(--mono); }
+details.more[open] summary::after { content: "−"; }
+.check { display: flex; gap: 8px; align-items: center; margin-top: 10px; font-size: 13px; }
+.check input { accent-color: var(--ink); width: 16px; height: 16px; }
+
+.actions { border-top: 1px solid var(--rule-strong); padding-top: 16px; display: grid; gap: 10px; }
+.primary { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; padding: 14px 20px; border: 0; border-radius: 999px; background: var(--btn); color: var(--btn-ink); font-weight: 600; font-size: 16px; cursor: pointer; }
+.primary small { font-family: var(--mono); font-weight: 400; font-size: 11px; opacity: .8; }
+.primary:disabled { opacity: .35; cursor: not-allowed; }
+.secondary { display: flex; gap: 8px; }
+.secondary button { flex: 1; padding: 10px 12px; border: 1px solid var(--rule-strong); border-radius: 2px; background: transparent; font-size: 13px; cursor: pointer; }
+.secondary button:disabled { opacity: .35; cursor: not-allowed; }
+.cardbtn { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; width: 100%; padding: 10px 14px; border: 1px dashed var(--rule-strong); border-radius: 2px; background: transparent; font-size: 13px; cursor: pointer; text-align: left; }
+.cardbtn small { font-size: 11px; color: var(--ink-2); }
+.cardbtn:disabled { opacity: .35; cursor: not-allowed; }
+.status { min-height: 1.4em; margin: 0; font-size: 13px; }
+.status.warn { color: var(--warn); }
+.status.fix { color: var(--ink-2); }
+.status a { font-weight: 600; }
+.first { margin: 0; font-size: 12px; color: var(--ink-2); }
+
+/* ---- 刷る・組む ---- */
+.how { border-top: 1px solid var(--rule-strong); padding-block: 28px 48px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 32px; }
+.how h2 { margin: 0 0 4px; font-family: var(--serif); font-weight: 400; font-size: 40px; line-height: 1; letter-spacing: -.02em; }
+.how h2 + p { margin: 0 0 12px; font-size: 12px; color: var(--ink-2); }
+.how ol, .how ul { margin: 0; padding-left: 1.2em; font-size: 14px; }
+.how li { margin-bottom: 6px; }
+.spec { margin-top: 12px; font-family: var(--mono); font-size: 12px; color: var(--ink-2); }
+footer { border-top: 1px solid var(--rule); padding-block: 16px 28px; font-size: 11px; color: var(--ink-2); display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; }
+
+@media (min-width: 901px) {
+  .models li:nth-child(odd) { --shift: -26vw; }
+  .models li:nth-child(even) { --shift: 24vw; }
+  .models li:nth-child(3n) { --shift: -8vw; }
+}
+@media (max-width: 900px) {
+  .studio { grid-template-columns: 1fr; gap: 12px; }
+  .stage { top: 50px; z-index: 5; background: var(--bg); padding-bottom: 6px; }
+  .viewer { height: 36svh; min-height: 220px; }
+  .hint { display: none; }
+  .intro { grid-template-columns: 1fr; }
+  .how { grid-template-columns: 1fr; gap: 24px; }
+}
+@media (max-width: 560px) {
+  .top nav { gap: 14px; font-size: 13px; }
+  .hero { --ph: 15vw; }
+  .models li:nth-child(odd) { --shift: -22%; }
+  .models li:nth-child(even) { --shift: 20%; }
+  .models li:nth-child(3n) { --shift: -6%; }
+  .pick { position: static; text-align: left; padding: 10px var(--gutter) 0; }
+  .stair { font-size: 21vw; }
+  .intro { padding-block: 8px 28px; }
+  .verdict { grid-template-columns: 1fr; }
+  .verdict .model-now { text-align: left; }
+  .facts { grid-template-columns: repeat(3, 1fr); }
+}
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  .verdict h2 .q { animation: none; }
+  .model img { transition: none; }
+}
+</style>
+
+</head>
+<body>
+<header class="top">
+  <div class="wrap">
+    <a class="mark" href="#top">this is a pen.</a>
+    <nav aria-label="ページ内">
+      <a href="#lineup">Lineup</a>
+      <a href="#make">Make</a>
+      <a href="#how">Print</a>
+    </nav>
+  </div>
+</header>
+
+<main id="top">
+  <section class="hero wrap" id="lineup" aria-labelledby="stairTitle">
+    <div class="stack">
+      <ol class="models loading" id="models" aria-label="7本の見本。押すとその形から作り始めます"></ol>
+      <p class="pick" id="pick" aria-hidden="true"><b>Pick a pen.</b>押すとその形から作り始めます</p>
+    </div>
+    <div class="intro">
+      <h1 class="stair" id="stairTitle"><span>Is</span><span>this a</span><span>pen?</span></h1>
+      <div class="copy">
+        <p>無印良品のゲルインキ替芯が入るペン軸を、ブラウザで作って3Dプリンタで刷る。</p>
+        <p>くびれの数と深さ、断面のかたち、ねじれ。動かすたびに軸がそれを確かめて、ペンになったら「This is a pen!」と言います。</p>
+        <dl class="facts">
+          <div><dt>替芯</dt><dd>Ø6.2 × 111</dd></div>
+          <div><dt>部品</dt><dd>3パーツ</dd></div>
+          <div><dt>書き出し</dt><dd>.3mf</dd></div>
+        </dl>
+        <a class="cta" href="#make">Make your pen <span aria-hidden="true">↓</span></a>
+        <p class="need">いるもの: 対応する替芯(<a href="https://www.muji.com/jp/ja/store/cmdty/detail/4550002822880" target="_blank" rel="noopener">無印良品 ゲルインキボールペン替芯</a> または <a href="https://www.mpuni.co.jp/products/ballpoint_pens/refill_water_based.html?refill_code2=UBR-Z-38" target="_blank" rel="noopener">三菱鉛筆 UBR-Z-38</a>)と、FDMの3Dプリンタ。</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="make wrap" id="make" aria-labelledby="headline">
+    <div class="verdict">
+      <div>
+        <h2 id="headline" aria-live="polite">Is this a pen<span class="q">?</span></h2>
+        <p class="sentence" id="sentence">Hmm… let me see.</p>
+        <p class="sentenceJa" id="sentenceJa">ペン軸を作っています</p>
+      </div>
+      <p class="model-now"><b id="modelName">Hex</b><span id="modelNote">見本から</span></p>
+    </div>
+
+    <div class="studio">
+      <div class="stage">
+        <div class="viewer" id="viewer">
+          <div class="views" role="group" aria-label="見え方">
+            <button type="button" id="viewPen" aria-pressed="true">ペン</button>
+            <button type="button" id="viewCut" aria-pressed="false">断面</button>
+            <button type="button" id="viewPrint" aria-pressed="false">印刷の向き</button>
+            <button type="button" id="viewReal" aria-pressed="false">実寸</button>
+          </div>
+          <p class="hint" id="hint">ドラッグで回転・ホイールで拡大</p>
+          <p class="hud"><span class="mono" id="dims"></span><br><span id="tris"></span></p>
+        </div>
+      </div>
+
+      <form class="panel" id="panel" autocomplete="off">
+        <div class="group">
+          <h3>Model <small>見本</small></h3>
+          <div class="chips" id="modelChips" role="group" aria-label="見本"></div>
+        </div>
+
+        <div class="group">
+          <h3>Waist <small>くびれ</small></h3>
+          <div class="row"><label for="waists">数</label><input type="range" id="waists" min="0" max="8" step="1"><output for="waists" id="waists_o"></output></div>
+          <div class="row"><label for="waistDepth">深さ</label><input type="range" id="waistDepth" min="0" max="3" step="0.1"><output for="waistDepth" id="waistDepth_o"></output></div>
+          <div class="row"><label for="waistWidth">幅</label><input type="range" id="waistWidth" min="0.15" max="1" step="0.05"><output for="waistWidth" id="waistWidth_o"></output></div>
+          <div class="row"><label for="waistPos">位置</label><input type="range" id="waistPos" min="0" max="1" step="0.05"><output for="waistPos" id="waistPos_o"></output><span class="ends"><span>後ろ</span><span>ペン先</span></span></div>
+          <p class="note" id="waistNote" hidden>数を1以上にすると、深さ・幅・位置が効きます。</p>
+        </div>
+
+        <div class="group">
+          <h3>Twist <small>断面とねじれ</small></h3>
+          <div class="chips" id="sectionChips" role="group" aria-label="断面">
+            <button type="button" data-v="round">丸</button>
+            <button type="button" data-v="poly:3">三角</button>
+            <button type="button" data-v="poly:4">四角</button>
+            <button type="button" data-v="poly:6">六角</button>
+            <button type="button" data-v="poly:8">八角</button>
+            <button type="button" data-v="petal">花形</button>
+          </div>
+          <div class="row" id="petalsRow"><label for="petals">花びら</label><input type="range" id="petals" min="3" max="12" step="1"><output for="petals" id="petals_o"></output></div>
+          <div class="row" id="petalDepthRow"><label for="petalDepth">溝の深さ</label><input type="range" id="petalDepth" min="0.3" max="2.5" step="0.05"><output for="petalDepth" id="petalDepth_o"></output></div>
+          <div class="row" id="twistRow"><label for="twist">ねじれ</label><input type="range" id="twist" min="-3" max="3" step="0.25"><output for="twist" id="twist_o"></output><span class="ends"><span>左巻き</span><span>右巻き</span></span></div>
+          <p class="note" id="twistNote" hidden>丸い断面はねじっても見た目が変わりません。角か花形にするとねじれが出ます。</p>
+          <div class="row"><label for="outerDia">太さ</label><input type="range" id="outerDia" min="9" max="18" step="0.1"><output for="outerDia" id="outerDia_o"></output></div>
+        </div>
+
+        <div class="group">
+          <h3>Color <small>フィラメント</small></h3>
+          <div class="swatches" id="swatches" role="group" aria-label="色"></div>
+          <p class="colorName" id="colorName"></p>
+        </div>
+
+        <div class="group">
+          <h3>Cap <small>キャップと先端</small></h3>
+          <div class="chips" id="capChips" role="group" aria-label="キャップ">
+            <button type="button" data-v="slip">かぶせ</button>
+            <button type="button" data-v="flush">面一</button>
+            <button type="button" data-v="none">なし</button>
+          </div>
+          <p class="note" id="capNote"></p>
+          <div class="row"><label for="noseLen">先細り</label><input type="range" id="noseLen" min="8" max="24" step="0.5"><output for="noseLen" id="noseLen_o"></output><span class="ends"><span>短く</span><span>長く</span></span></div>
+          <label class="check"><input type="checkbox" id="flat"> 1面だけ平らにする(転がり防止)</label>
+          <div class="row" id="flatDepthRow"><label for="flatDepth">削る量</label><input type="range" id="flatDepth" min="0.3" max="2.5" step="0.1"><output for="flatDepth" id="flatDepth_o"></output></div>
+        </div>
+
+        <details class="more">
+          <summary>替芯</summary>
+          <div class="row"><label for="tipExposed">ペン先</label><input type="range" id="tipExposed" min="2" max="20" step="0.1"><output for="tipExposed" id="tipExposed_o"></output></div>
+          <div class="row"><label for="clearance">すき間</label><input type="range" id="clearance" min="0" max="0.6" step="0.05"><output for="clearance" id="clearance_o"></output></div>
+          <p class="note">対応する替芯: 無印良品 ゲルインキボールペン替芯 / 三菱鉛筆 UBR-Z-38(Ø6.2 × 111 mm)。ペン先は替芯の先端から測った長さ、すき間は替芯と穴の片側の余裕です。</p>
+        </details>
+
+        <div class="actions">
+          <button type="button" class="primary" id="export">3MFを書き出す <small id="exportMeta"></small></button>
+          <div class="secondary">
+            <button type="button" id="exportTrial">先端30 mmを試し刷り</button>
+            <button type="button" id="share">リンクをコピー</button>
+          </div>
+          <button type="button" class="cardbtn" id="card"><span>ペンの名刺を保存</span><small>広告風の1枚絵(PNG)</small></button>
+          <p class="first">はじめてなら、先に先端だけ刷って替芯がすっと入るか確かめてから本刷りへ。緩い・きつい時は「替芯」のすき間を 0.05 mm ずつ。</p>
+          <p class="status" id="status" role="status"></p>
+        </div>
+      </form>
+    </div>
+  </section>
+
+  <section class="how wrap" id="how">
+    <div>
+      <h2>Print it.</h2>
+      <p>刷る</p>
+      <ol>
+        <li>3MFを Bambu Studio や PrusaSlicer で開くと、軸・キャップ・栓が立った向きで並んでいます。</li>
+        <li>0.2 mm レイヤー、壁 3 周、インフィル 15%。サポートは要りません。</li>
+        <li>はじめての時は「先端だけ試し刷り」(先端 30 mm)で替芯の収まりを確かめてから本刷りへ。</li>
+      </ol>
+    </div>
+    <div>
+      <h2>Put it together.</h2>
+      <p>組む</p>
+      <ol>
+        <li>替芯を後ろから入れて、ペン先が出るまで押し込みます。</li>
+        <li>栓をねじ込み、硬貨で軸の後端と面一になるまで回します。</li>
+        <li>キャップをかぶせて、カチッと止まれば出来上がり。</li>
+      </ol>
+    </div>
+    <div>
+      <h2>Before you print.</h2>
+      <p>知っておくこと</p>
+      <ul>
+        <li>替芯が緩い・きつい時は「すき間」を 0.05 mm ずつ変えてください。</li>
+        <li>栓とキャップの真ん中には通気穴があります。インクが出なくなるので塞がないでください。</li>
+        <li>対応する替芯は <a href="https://www.muji.com/jp/ja/store/cmdty/detail/4550002822880" target="_blank" rel="noopener">無印良品 ゲルインキボールペン替芯</a> と <a href="https://www.mpuni.co.jp/products/ballpoint_pens/refill_water_based.html?refill_code2=UBR-Z-38" target="_blank" rel="noopener">三菱鉛筆 UBR-Z-38</a>(Ø6.2 × 長さ111 mm)。ペン先の出る長さは無印良品の製品と同じ 4 mm が標準。長くすると金属の口金まで見せられます。</li>
+        <li>透明のフィラメントでは、中の替芯が透けて見えます。</li>
+      </ul>
+      <p class="spec mono" id="spec"></p>
+      <p class="spec"><a href="models/refill-6.2x111.step" download>替芯の3Dモデル(STEP)をダウンロード</a></p>
+    </div>
+  </section>
+</main>
+
+<footer class="wrap">
+  <span>this is a pen. — a pen-body generator</span>
+  <span>無印良品は株式会社良品計画の、uni は三菱鉛筆株式会社の商標です。本サイトは両社とは関係ありません。 · <a href="https://github.com/y-morishita-biz/isthisapen">GitHub</a></span>
+</footer>
+
+<script src="vendor/three.min.js"></script>
+<script src="vendor/OrbitControls.js"></script>
+<script src="vendor/RoomEnvironment.js"></script>
+<script src="pen-core.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
