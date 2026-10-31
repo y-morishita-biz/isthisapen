@@ -486,7 +486,7 @@
 
   // 横向きのペンを透明な背景の画像にする(見本の並びとペンの名刺で使う)
   let studio = null;
-  function penImage(b, color, w, h, mmW) {
+  function penImage(b, color, w, h, mmW, opts = {}) {
     if (!studio) {
       try {
         const r = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
@@ -503,15 +503,25 @@
     cam.position.set(0, 0.45, 1).normalize().multiplyScalar(200);
     cam.lookAt(0, 0, 0);
     cam.updateProjectionMatrix();
+    const f = FILAMENTS[color];
     const mat = penMaterial(color);
-    const pen = assemble(b, mat, { capOn: true, refill: FILAMENTS[color].clear ? inkMat : null });
+    if (opts.print) {
+      // 名刺は紙に刷る絵なので、白が飛ばないように少し抑える
+      if (f.hex === '#F1F1EC') mat.color.set('#F4F4EE');
+      if (f.clear) mat.opacity = 0.6;
+    }
+    const pen = assemble(b, mat, { capOn: true, refill: f.clear ? inkMat : null });
     pen.rotation.y = Math.PI / 2;                // ペン先を右へ
     const g = new THREE.Group();
     g.add(pen);
     const box = new THREE.Box3().setFromObject(g);
     g.position.sub(box.getCenter(new THREE.Vector3()));
+    penImage.lastLen = box.max.x - box.min.x;
     sc.add(g);
+    const tm = r.toneMapping, te = r.toneMappingExposure;
+    if (opts.print && (f.clear || f.hex === '#F1F1EC')) { r.toneMapping = THREE.ACESFilmicToneMapping; r.toneMappingExposure = f.clear ? 0.9 : 1.15; }
     r.render(sc, cam);
+    r.toneMapping = tm; r.toneMappingExposure = te;
     const url = r.domElement.toDataURL('image/png');
     sc.remove(g); disposeTree(g); mat.dispose();
     return url;
@@ -658,41 +668,122 @@
     return name;
   }
   // ---- ペンの名刺: 広告のような 1 枚絵 ----
+  // ペンと替芯を同じ縮尺(14 px/mm)で並べる。後ろは左へはみ出させ、ペン先側で止める
+  const CARD_PX = 14;
+  function penNumber() {
+    let h = 2166136261;
+    for (const ch of location.hash || JSON.stringify(state)) { h ^= ch.charCodeAt(0); h = Math.imul(h, 16777619); }
+    return String((h >>> 0) % 10000).padStart(4, '0');
+  }
   async function makeCard() {
-    const W = 1600, H = 1000;
+    const W = 1600, H = 1000, M = 64, INK = '#1B200C';
     const c = document.createElement('canvas'); c.width = W; c.height = H;
     const g = c.getContext('2d');
-    try { await Promise.all(['400 120px "Instrument Serif"', 'italic 400 40px "Instrument Serif"', '400 20px "IBM Plex Mono"'].map((f) => document.fonts.load(f))); } catch (e) { /* 代わりの書体で描く */ }
+    try { await Promise.all(['400 170px "Instrument Serif"', 'italic 400 54px "Instrument Serif"', '400 22px "IBM Plex Mono"'].map((f) => document.fonts.load(f))); } catch (e) { /* 代わりの書体で描く */ }
     const serif = '"Instrument Serif", "Times New Roman", serif';
-    g.fillStyle = '#D8E021'; g.fillRect(0, 0, W, H);
-    g.fillStyle = '#1B200C';
-    g.font = `400 40px ${serif}`; g.textBaseline = 'top';
-    g.fillText('this is a pen.', 64, 56);
-    // ペンは右へはみ出させる
-    const img = new Image();
-    img.src = penImage(current, state.color, 1800, 260, 180);
-    await img.decode();
-    g.drawImage(img, 60, 250, 1800, 260);
-    const d = describe(state);
-    g.textBaseline = 'alphabetic';
-    g.font = `400 150px ${serif}`;
-    g.fillText('This is a pen.', 56, 760);
-    g.font = `italic 400 44px ${serif}`;
-    wrapText(g, d.en.replace(/^This is /, '— '), 64, 840, 1000, 52);
-    g.font = '400 18px "IBM Plex Mono", ui-monospace, monospace';
+    const mono = '"IBM Plex Mono", ui-monospace, monospace';
+    const jpSerif = '"Hiragino Mincho ProN", "Yu Mincho", "Noto Serif JP", serif';
     const L = current.layout;
-    const lines = [`Ø${(L.rMax * 2).toFixed(1)} × ${L.bodyLen.toFixed(0)} mm`, `${FILAMENTS[state.color].name.split(' ')[0]} · ${PRESETS.find((p) => p.key === presetKey)?.name || 'Yours'}`, 'MUJI gel refill Ø6.2'];
+    g.fillStyle = '#D8E021'; g.fillRect(0, 0, W, H);
+    g.fillStyle = INK;
+
+    // 上の段: 左に日本語(小さく)、右に作り方
+    g.textBaseline = 'alphabetic';
+    g.font = `400 24px ${jpSerif}`;
+    g.fillText('これは、ペンです。', M, 82);
+    g.font = `400 20px ${mono}`;
     g.textAlign = 'right';
-    lines.forEach((t, k) => g.fillText(t, W - 64, H - 64 - (lines.length - 1 - k) * 28));
+    g.fillText('make yours ↗ y-morishita-biz.github.io/isthisapen', W - M, 82);
+    g.textAlign = 'left';
+
+    // ペン: 縮尺を固定して、キャップの端を x = 1460 に揃える
+    const IW = 2600, IH = 380, cy = 270, TIP = 1460, s = CARD_PX;
+    const img = new Image();
+    img.src = penImage(current, state.color, IW, IH, IW / s, { print: true });
+    await img.decode();
+    const len = penImage.lastLen * s;
+    const dx = TIP - (IW / 2 + len / 2);
+    const rPx = L.rMax * s;
+    g.save();
+    g.filter = 'blur(24px)';
+    g.fillStyle = 'rgba(0,0,0,.12)';
+    g.beginPath();
+    g.ellipse(TIP - len * 0.3, cy + rPx + 26, len * 0.3, 15, 0, 0, Math.PI * 2);
+    g.fill();
+    g.restore();
+    g.drawImage(img, dx, cy - IH / 2, IW, IH);
+
+    // 替芯: 同じ縮尺・同じ向きの図面。先はペン先の真下、後ろは左へはみ出す
+    const ry = 468, X = (mm) => TIP - mm * s;
+    const outline = () => {
+      g.beginPath();
+      g.moveTo(X(0), ry);
+      for (let x = 0; x <= Core.REFILL.length; x += x < 22 ? 0.2 : 1) g.lineTo(X(x), ry - Core.refillDiaAt(x) / 2 * s);
+      for (let x = Core.REFILL.length; x >= 0; x -= x <= 22 ? 0.2 : 1) g.lineTo(X(x), ry + Core.refillDiaAt(x) / 2 * s);
+      g.closePath();
+    };
+    outline();
+    g.fillStyle = 'rgba(27,32,12,.10)'; g.fill();
+    g.save(); g.clip();
+    g.fillStyle = INK; g.fillRect(X(Core.REFILL.metalEnd), 0, Core.REFILL.metalEnd * s + 2, H);  // 口金だけ塗る
+    g.restore();
+    outline();
+    g.strokeStyle = INK; g.lineWidth = 2; g.lineJoin = 'round'; g.stroke();
+    // 目盛り: ペン先を 0 にして左へ
+    const ty = ry + 3.1 * s + 16;
+    g.strokeStyle = 'rgba(27,32,12,.5)'; g.lineWidth = 1;
+    g.beginPath();
+    g.moveTo(0, ty + .5); g.lineTo(X(0), ty + .5);
+    for (let mm = 0; X(mm) >= 0; mm++) {
+      const x = Math.round(X(mm)) + .5, t = mm % 10 === 0 ? 14 : mm % 5 === 0 ? 9 : 5;
+      g.moveTo(x, ty); g.lineTo(x, ty + t);
+    }
+    g.stroke();
+    g.fillStyle = 'rgba(27,32,12,.7)';
+    g.font = `400 16px ${mono}`;
+    g.textAlign = 'center';
+    for (let mm = 0; X(mm) >= 40; mm += 30) g.fillText(mm === 0 ? '0 mm' : String(mm), X(mm), ty + 34);
+    g.textAlign = 'left';
+    g.fillText('refill', X(0) + 18, ry + 6);
+
+    // 見出しは2段の階段に
+    g.fillStyle = INK;
+    g.font = `400 170px ${serif}`;
+    g.fillText('This is', M - 8, 760);
+    g.fillText('a pen.', 300, 915);
+
+    // 仕様の札(番号を大きく)
+    const name = PRESETS.find((p) => p.key === presetKey)?.name || 'Custom';
+    const specs = [`Ø${(L.rMax * 2).toFixed(1)} × ${L.bodyLen.toFixed(0)} mm`, `${FILAMENTS[state.color].en} · ${name}`, 'refill MUJI gel · uni UBR-Z-38'];
+    g.textAlign = 'right';
+    const lh = 27, last = 936, top = last - (specs.length - 1) * lh;
+    g.font = `400 18px ${mono}`;
+    specs.forEach((t, k) => g.fillText(t, W - M, top + k * lh));
+    const noY = top - 40;
+    g.font = `400 28px ${mono}`;
+    g.fillText(`PEN No. ${penNumber()}`, W - M, noY);
+    const ruleY = noY - 46;
+    g.fillRect(W - M - 300, ruleY, 300, 1.5);
+
+    // そのペンだけの一文: 罫線の上に置き、上へ伸ばす
+    const d = describe(state);
+    let text = d.en.replace(/^This is /, '');
+    text = text.charAt(0).toUpperCase() + text.slice(1);
+    let fs = 54, lines;
+    for (; fs > 36; fs -= 2) { g.font = `italic 400 ${fs}px ${serif}`; lines = splitLines(g, text, 620); if (lines.length <= 3) break; }
+    const slh = Math.round(fs * 1.12);
+    lines.forEach((t, k) => g.fillText(t, W - M, ruleY - 40 - (lines.length - 1 - k) * slh));
+    g.textAlign = 'left';
     return new Promise((res) => c.toBlob(res, 'image/png'));
   }
-  function wrapText(g, text, x, y, maxW, lh) {
-    let line = '';
+  function splitLines(g, text, maxW) {
+    const out = []; let line = '';
     for (const w of text.split(' ')) {
       const t = line ? line + ' ' + w : w;
-      if (g.measureText(t).width > maxW && line) { g.fillText(line, x, y); y += lh; line = w; } else line = t;
+      if (g.measureText(t).width > maxW && line) { out.push(line); line = w; } else line = t;
     }
-    g.fillText(line, x, y);
+    out.push(line);
+    return out;
   }
   $('card').addEventListener('click', async () => {
     if (!current || current.layout.blocking) return;
