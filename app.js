@@ -285,10 +285,11 @@
     for (const part of b.parts) geos[part.name] = toGeometry(part.mesh);
     pen.add(new THREE.Mesh(geos['pen-body'], mat));
     if (geos['pen-plug']) {
-      // 後ろ栓は印刷向きで届くので、180°回して軸の後端に面一で戻す
+      // 後ろ栓は印刷向き(コインの面が下)で届くので、軸の後端へ戻す
       const plug = new THREE.Mesh(geos['pen-plug'], mat);
-      plug.rotation.x = Math.PI;
-      plug.position.z = b.parts.find((q) => q.name === 'pen-plug').mesh.assembled.z;
+      const as = b.parts.find((q) => q.name === 'pen-plug').mesh.assembled;
+      if (as.flipX) plug.rotation.x = Math.PI;
+      plug.position.z = as.z;
       pen.add(plug);
     }
     if (geos['pen-cap']) {
@@ -403,8 +404,8 @@
     controls.enabled = view !== 'real';
     const est = estimate(b);
     $('tris').textContent = `約 ${est.g} g · 約 ${est.min} 分(PLA の目安)`;
-    $('dims').textContent = `${L.bodyLen.toFixed(1)} × Ø${(L.rMax * 2).toFixed(1)} mm`;
-    $('spec').textContent = `軸 ${L.bodyLen.toFixed(1)} mm · 外径 ${(L.rMax * 2).toFixed(1)} mm · 替芯の穴 Ø${L.bore.toFixed(2)} · 栓 P1.5 右ねじ`;
+    $('dims').textContent = `${(L.bodyLen + L.plugHead).toFixed(1)} × Ø${(L.rMax * 2).toFixed(1)} mm`;
+    $('spec').textContent = `全長 ${(L.bodyLen + L.plugHead).toFixed(1)} mm(栓の頭 ${L.plugHead} mm 込み) · 外径 ${(L.rMax * 2).toFixed(1)} mm · 替芯の穴 Ø${L.bore.toFixed(2)} · 栓 P1.5 右ねじ・10円玉で締める`;
   }
 
   function setView(v) {
@@ -754,7 +755,7 @@
 
     // 仕様の札(番号を大きく)
     const name = PRESETS.find((p) => p.key === presetKey)?.name || 'Custom';
-    const specs = [`Ø${(L.rMax * 2).toFixed(1)} × ${L.bodyLen.toFixed(0)} mm`, `${FILAMENTS[state.color].en} · ${name}`, 'refill MUJI gel · uni UBR-Z-38'];
+    const specs = [`Ø${(L.rMax * 2).toFixed(1)} × ${(L.bodyLen + L.plugHead).toFixed(0)} mm`, `${FILAMENTS[state.color].en} · ${name}`, 'refill MUJI gel · uni UBR-Z-38'];
     g.textAlign = 'right';
     const lh = 27, last = 936, top = last - (specs.length - 1) * lh;
     g.font = `400 18px ${mono}`;

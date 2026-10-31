@@ -66,9 +66,11 @@
   const TH_RMIN = 3.6;     // めねじの内径側(替芯 Ø6.2 が通る)
   const TH_RMAX = TH_RMIN + TH_H; // めねじの谷 = Ø8.4
   const TH_CLR = 0.25;     // おねじとめねじのすき間(半径で)
-  const SLOT_W = 2.0;      // コインのスリット幅(1円〜500円玉の厚み 1.5〜2.0 に合わせる)
-  const SLOT_D = 1.6;      // スリットの深さ
-  const SLOT_L = 2.6;      // スリットの半分の長さ(端は丸く閉じる)
+  // 後ろ栓の頭は軸と同じ太さで後端に出し、10円玉(Ø23.5・厚さ1.5)が回せるスリットを端から端まで通す。
+  // 頭が軸の後端に当たって止まるので、軸の端はスリットに掛からず、栓だけが回る
+  const SLOT_W = 2.0;      // コインのスリット幅(10円玉の厚み 1.5 + すき間)
+  const SLOT_D = 1.8;      // スリットの深さ(Ø10.8 の頭で10円玉が両端まで 0.5 以上かかる)
+  const HEAD = 2.8;        // 栓の頭の厚み(スリットの底に 1.0 残す)
   const EXIT_FIT = 0.4;    // 口金の穴と替芯のすき間(直径で)
   const VENT = 0.75;       // 後ろ栓とキャップの通気穴の半径
   const SEAT_ANGLE = 45;   // 替芯の角丸を受ける座の角度(立てて印刷してもサポート不要)
@@ -170,7 +172,7 @@
     if (noseLen > p.noseLen) issues.push(`先細りが急なので、サポートなしで刷れる ${noseLen} mm にしました`);
     if (rRear > rMax + 0.05) issues.push(`後ろ端は栓のねじのため Ø${(rRear * 2).toFixed(1)} あります`);
     if (p.capStyle === 'flush' && rCapOut > rMax + 0.05) issues.push(`面一キャップは Ø${(rCapOut * 2).toFixed(1)} 以上になります`);
-    return { bore, rIn, rMin, rMax, rBand, r0: rBand, rRear, rFront, rFrontBase, rCapIn, rCapOut, flatD, flatRear, flatCap, bandLen, noseLen, noseStart, capZ, bodyLen, holeR, noseR, zoneStart, zoneEnd, sec, issues, blocking };
+    return { bore, rIn, rMin, rMax, rBand, r0: rBand, rRear, rFront, rFrontBase, rCapIn, rCapOut, flatD, flatRear, flatCap, bandLen, noseLen, noseStart, capZ, bodyLen, plugHead: HEAD, holeR, noseR, zoneStart, zoneEnd, sec, issues, blocking };
   }
 
   // 回転体メッシュ。profile は (r, z) の閉じた輪郭で、各点の kind で形の付け方を決める。
@@ -191,7 +193,9 @@
         const v = shapeFn(pt, th);
         const r = typeof v === 'number' ? v : v.r;
         const z = typeof v === 'number' ? pt.z : v.z;
-        pos.push(r * Math.cos(th), r * Math.sin(th), z);
+        // shapeFn は x, y を直接返してもよい(スリットの壁をまっすぐ立てるため)
+        if (v.x !== undefined) pos.push(v.x, v.y, z);
+        else pos.push(r * Math.cos(th), r * Math.sin(th), z);
       }
       rings.push({ start });
     }
@@ -407,32 +411,42 @@
     return revolve(prof, N, shape, S.twist);
   }
 
-  // 後ろ栓: 軸の後端と面一になるねじ込み式。後端の面にコイン用のスリット、中心に通気穴。
-  // 軸の座標(後端 z = 0)で作ってから、前の面を下にして印刷できるよう X 軸まわりに 180°回す(ねじの向きは変わらない)
+  // 後ろ栓: 軸の後端にねじ込み、頭(軸と同じ太さ)が後端に当たって止まる。頭の面に貫通スリット、中心に通気穴。
+  // 軸の座標(後端 z = 0、頭は z < 0)で作り、コインの面を下にして印刷する(スリットは 2mm の橋渡しで済む)
   function buildPlug(p, L) {
     const N = 192;
     const len = PLUG_DEPTH - PLUG_GAP;               // 替芯の後端の 0.2mm 手前まで
     const rRoot = TH_RMIN - TH_CLR;                  // おねじの谷
     const lead = 0.8;                                // ねじ山を両端で細らせる長さ(入れやすくする)
+    const rHead = (L.flatRear ? Math.min(L.rRear, L.flatRear) : L.rRear) - 0.05;
     const prof = [];
-    // コイン側の面(z = 0)を通気穴から外へ
-    for (let r = VENT; r < rRoot - 0.35; r += 0.12) prof.push({ r, z: 0, kind: 'face' });
-    prof.push({ r: rRoot - 0.3, z: 0, kind: 'face' });
+    // コイン側の面(z = −HEAD)を通気穴から外へ。角は面取りし、スリットは側面まで抜く
+    for (let r = VENT; r < rHead - 0.45; r += 0.12) prof.push({ r, z: -HEAD, kind: 'face' });
+    prof.push({ r: rHead - 0.4, z: -HEAD, kind: 'face' });
+    prof.push({ r: rHead, z: -HEAD + 0.4, kind: 'face' });
+    prof.push({ r: rHead, z: -HEAD + SLOT_D + 0.2, kind: 'plain' });
+    prof.push({ r: rHead, z: -0.4, kind: 'plain' });
+    // 頭の裏(軸の後端に当たる面)。軸の面取りと合わせて細い溝に見せる
+    prof.push({ r: rHead - 0.4, z: 0, kind: 'plain' });
+    prof.push({ r: rRoot, z: 0, kind: 'plain' });
     // おねじ
     for (const z of zSteps(0.3, len - 0.3, 0.1)) prof.push({ r: rRoot, z, kind: 'mthread' });
     // 前の面(替芯を押す)
     prof.push({ r: rRoot - 0.3, z: len, kind: 'plain' });
     prof.push({ r: VENT, z: len, kind: 'plain' });
     // 通気穴の壁(スリットの底まで)
-    for (const z of zSteps(len - 0.2, SLOT_D + 0.2, DZ)) prof.push({ r: VENT, z, kind: 'plain' });
-    const inSlot = (r, th) => {
-      const x = Math.abs(r * Math.cos(th)), y = Math.abs(r * Math.sin(th));
-      const hw = SLOT_W / 2, end = SLOT_L - hw;
-      if (x <= end) return y <= hw;
-      return Math.hypot(x - end, y) <= hw;
-    };
+    for (const z of zSteps(len - 0.2, -HEAD + SLOT_D + 0.2, DZ)) prof.push({ r: VENT, z, kind: 'plain' });
+    const hw = SLOT_W / 2, dth = TAU / N;
+    const inSlot = (r, th) => Math.abs(r * Math.sin(th)) <= hw;
     const shape = (pt, th) => {
-      if (pt.kind === 'face') return { r: pt.r, z: inSlot(pt.r, th) ? SLOT_D : 0 };
+      if (pt.kind === 'face') {
+        const inside = inSlot(pt.r, th);
+        const z = inside ? -HEAD + SLOT_D : pt.z;
+        // スリットの縁に接する点は y = ±幅/2 に寄せ、壁をまっすぐにする
+        const edge = inside !== inSlot(pt.r, th - dth) || inside !== inSlot(pt.r, th + dth);
+        if (edge && pt.r > hw) return { r: pt.r, z, x: pt.r * Math.cos(th), y: Math.sign(Math.sin(th)) * hw };
+        return { r: pt.r, z };
+      }
       if (pt.kind === 'mthread') {
         const f = smooth(Math.min(pt.z, len - pt.z) / lead);
         return rRoot + (TH_H * threadW(th, pt.z)) * f;
@@ -440,10 +454,10 @@
       return pt.r;
     };
     const m = revolve(prof, N, shape, () => 0);
-    // 印刷向きへ: (x, y, z) → (x, −y, len − z)
+    // 印刷向きへ: コインの面をベッドに(z を HEAD だけ持ち上げる)
     const P = m.positions;
-    for (let i = 0; i < P.length; i += 3) { P[i + 1] = -P[i + 1]; P[i + 2] = len - P[i + 2]; }
-    m.assembled = { flipX: true, z: len };          // 組み立て図: X 軸まわりに 180°回して z = len に置く
+    for (let i = 2; i < P.length; i += 3) P[i] += HEAD;
+    m.assembled = { flipX: false, z: -HEAD };       // 組み立て図: そのまま z = −HEAD に置く
     return m;
   }
 
