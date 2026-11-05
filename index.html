@@ -154,6 +154,14 @@ details.more { border-top: 1px solid var(--rule-strong); padding: 12px 0; }
 details.more summary { cursor: pointer; font-size: 14px; list-style: none; display: flex; justify-content: space-between; }
 details.more summary::after { content: "+"; font-family: var(--mono); }
 details.more[open] summary::after { content: "−"; }
+.settings { display: grid; gap: 10px; margin-top: 12px; }
+.settings .note { margin: 0; }
+.codeLabel { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; margin-top: 4px; font-size: 13px; }
+.codeLabel small { font-size: 11px; color: var(--ink-2); }
+.code { display: block; width: 100%; box-sizing: border-box; padding: 8px 10px; border: 1px solid var(--rule-strong); border-radius: 2px; background: transparent; color: var(--ink); font: 400 12px/1.45 var(--mono); word-break: break-all; resize: none; }
+.code:focus { outline: 2px solid var(--ink); outline-offset: 1px; }
+.code.bad { border-color: var(--warn); }
+#settings.drop { outline: 2px dashed var(--ink); outline-offset: 4px; }
 .check { display: flex; gap: 8px; align-items: center; margin-top: 10px; font-size: 13px; }
 .check input { accent-color: var(--ink); width: 16px; height: 16px; }
 
@@ -330,6 +338,24 @@ footer { border-top: 1px solid var(--rule); padding-block: 16px 28px; font-size:
           <div class="row"><label for="tipExposed">ペン先</label><input type="range" id="tipExposed" min="2" max="20" step="0.1"><output for="tipExposed" id="tipExposed_o"></output></div>
           <div class="row"><label for="clearance">すき間</label><input type="range" id="clearance" min="0" max="0.6" step="0.05"><output for="clearance" id="clearance_o"></output></div>
           <p class="note">対応する替芯: 無印良品 ゲルインキボールペン替芯 / 三菱鉛筆 UBR-Z-38(Ø6.2 × 111 mm)。ペン先は替芯の先端から測った長さ、すき間は替芯と穴の片側の余裕です。</p>
+        </details>
+
+        <details class="more" id="settings">
+          <summary>設定を保存・読み込む</summary>
+          <div class="settings">
+            <div class="secondary">
+              <button type="button" id="saveJson">JSONに保存</button>
+              <button type="button" id="loadJson">JSONを読み込む</button>
+            </div>
+            <input type="file" id="jsonFile" accept=".json,application/json" hidden>
+            <label class="codeLabel" for="code"><span>設定コード</span><small>貼り付けるとその形になります</small></label>
+            <textarea id="code" class="code" rows="2" spellcheck="false" autocomplete="off" autocapitalize="off"></textarea>
+            <div class="secondary">
+              <button type="button" id="copyCode">コードをコピー</button>
+              <button type="button" id="applyCode">このコードで作る</button>
+            </div>
+            <p class="note">JSONファイルやコードは、形・色・替芯の数値だけを持ちます。ファイルをこの欄へドラッグしても読み込めます。</p>
+          </div>
         </details>
 
         <div class="actions">

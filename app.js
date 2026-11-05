@@ -564,7 +564,7 @@
   }
 
   // ---- 作り直し ----
-  let timer = 0, latest = 0, spinNext = false;
+  let timer = 0, latest = 0, spinNext = false, loadNote = '';
   function changed() {
     setHeadline('thinking');
     $('sentence').textContent = 'Hmm… let me see.';
@@ -592,34 +592,164 @@
     const s = $('status');
     s.className = 'status' + (L.blocking ? ' warn' : L.issues.length ? ' fix' : '');
     s.textContent = L.issues.length ? (L.blocking ? '' : 'ペンにはなっています。') + L.issues.join('。') + '。' : '';
+    if (loadNote) { s.textContent = loadNote + s.textContent; loadNote = ''; }
     writeHash();
   }
 
   // ---- URL に形を残す(共有用) ----
   const HASH_KEYS = { sec: 'section', ps: 'polySides', pe: 'petals', pd: 'petalDepth', w: 'waists', wd: 'waistDepth', ww: 'waistWidth', wp: 'waistPos', tw: 'twist', od: 'outerDia', nl: 'noseLen', fd: 'flatDepth', c: 'color', e: 'tipExposed', cl: 'clearance' };
-  function writeHash() {
+  function stateQuery() {
     const q = new URLSearchParams();
     if (presetKey) q.set('m', presetKey);
     for (const [k, f] of Object.entries(HASH_KEYS)) q.set(k, String(state[f]));
     q.set('cs', state.capStyle);
     if (state.flat) q.set('fl', '1');
+    return q;
+  }
+  function writeHash() {
+    const q = stateQuery();
     try { history.replaceState(null, '', '#' + q.toString()); } catch (e) { /* 埋め込み先で使えない時はそのまま */ }
+    if (document.activeElement !== $('code')) { $('code').value = encodeCode(q); $('code').classList.remove('bad'); }
+  }
+  function queryParams(q) {
+    const params = {};
+    for (const [k, f] of Object.entries(HASH_KEYS)) if (q.has(k)) params[f] = q.get(k);
+    if (q.has('cs')) params.capStyle = q.get('cs');
+    params.flat = q.get('fl') === '1';
+    return { params, preset: q.get('m') };
+  }
+  // 外から来た数値(URL・JSON・コード)は、スライダーの範囲に収めてから使う
+  function applySettings(params, preset) {
+    const next = Object.assign({}, state);
+    for (const f of Object.values(HASH_KEYS)) {
+      if (!(f in params)) continue;
+      if (f === 'section') { next.section = ['round', 'poly', 'petal'].includes(params.section) ? params.section : 'round'; continue; }
+      let v = Number(params[f]);
+      if (!Number.isFinite(v)) continue;
+      const el = document.getElementById(f);
+      if (el && el.type === 'range') v = Math.min(Number(el.max), Math.max(Number(el.min), v));
+      next[f] = v;
+    }
+    next.polySides = Math.min(12, Math.max(3, Math.round(next.polySides)));
+    next.color = Math.max(0, Math.min(FILAMENTS.length - 1, Math.round(next.color) || 0));
+    if ('capStyle' in params) next.capStyle = ['slip', 'flush', 'none'].includes(params.capStyle) ? params.capStyle : 'slip';
+    if ('flat' in params) next.flat = params.flat === true || params.flat === 1 || params.flat === '1';
+    Object.assign(state, next);
+    presetKey = PRESETS.some((p) => p.key === preset) ? preset : null;
   }
   function readHash() {
     const q = new URLSearchParams(location.hash.slice(1));
     if (!q.has('od')) return false;
-    for (const [k, f] of Object.entries(HASH_KEYS)) {
-      if (!q.has(k)) continue;
-      const v = q.get(k);
-      state[f] = f === 'section' ? v : Number(v);
-    }
-    if (!['round', 'poly', 'petal'].includes(state.section)) state.section = 'round';
-    state.color = Math.max(0, Math.min(FILAMENTS.length - 1, Math.round(state.color) || 0));
-    state.capStyle = ['slip', 'flush', 'none'].includes(q.get('cs')) ? q.get('cs') : 'slip';
-    state.flat = q.get('fl') === '1';
-    presetKey = PRESETS.some((p) => p.key === q.get('m')) ? q.get('m') : null;
+    const { params, preset } = queryParams(q);
+    applySettings(params, preset);
     return true;
   }
+
+  // ---- 設定の保存と読み込み: JSON ファイルと、コピペできる設定コード ----
+  // 設定コードは数値を決まった順に _ でつないだもの。例: PEN1_hex_poly_6_6_1_0_1_0.5_0.5_0_12_14_0.8_9_4_0.3_flush_0
+  const CODE_KEYS = ['m', 'sec', 'ps', 'pe', 'pd', 'w', 'wd', 'ww', 'wp', 'tw', 'od', 'nl', 'fd', 'c', 'e', 'cl', 'cs', 'fl'];
+  function encodeCode(q) {
+    return ['PEN1'].concat(CODE_KEYS.map((k) => (k === 'fl' ? (q.get('fl') === '1' ? '1' : '0') : q.get(k) || '-'))).join('_');
+  }
+  // コード・URL・# 以降・JSON のどれを貼られても読む
+  function parseSettings(text) {
+    const t = String(text || '').trim();
+    if (!t) throw new Error('空です');
+    if (t.startsWith('{')) {
+      const o = JSON.parse(t);
+      const params = o && typeof o.params === 'object' ? o.params : o;
+      if (!params || !('outerDia' in params)) throw new Error('ペンの設定が見つかりません');
+      return { params, preset: o.preset || null };
+    }
+    const m = t.match(/PEN1_[\w.+-]+/i);
+    let q;
+    if (m) {
+      const v = m[0].split('_').slice(1);
+      if (v.length !== CODE_KEYS.length) throw new Error('コードが途中で切れているようです');
+      q = new URLSearchParams();
+      CODE_KEYS.forEach((k, i) => { if (v[i] !== '-') q.set(k, v[i]); });
+    } else q = new URLSearchParams(t.includes('#') ? t.slice(t.indexOf('#') + 1) : t);
+    if (!q.has('od')) throw new Error('ペンの設定が見つかりません');
+    return queryParams(q);
+  }
+  function loadSettings(text, from) {
+    const s = $('status');
+    try {
+      const { params, preset } = parseSettings(text);
+      applySettings(params, preset);
+    } catch (e) {
+      s.className = 'status warn';
+      s.textContent = `${from}を読めませんでした(${(e && e.message) || e})。`;
+      return false;
+    }
+    spinNext = true;
+    applyColors();
+    syncInputs();
+    needFit = true;
+    loadNote = `${from}からペンを作り直しました。`;
+    changed();
+    return true;
+  }
+  function settingsJSON() {
+    const params = {};
+    for (const f of Object.values(HASH_KEYS)) params[f] = state[f];
+    params.capStyle = state.capStyle;
+    params.flat = state.flat;
+    return JSON.stringify({ app: 'this is a pen.', format: 1, url: location.origin + location.pathname, preset: presetKey, colorName: FILAMENTS[state.color].en, params }, null, 2) + '\n';
+  }
+  $('saveJson').addEventListener('click', async () => {
+    const s = $('status');
+    s.className = 'status';
+    try {
+      const name = fileBase() + '.json';
+      await saveBlob(new Blob([settingsJSON()], { type: 'application/json' }), name);
+      s.textContent = `${name} を保存しました。「JSONを読み込む」でいつでもこの形に戻せます。`;
+    } catch (e) {
+      s.className = 'status warn';
+      s.textContent = e && e.code === 'declined' ? '保存をやめました。' : `保存できませんでした(${(e && (e.message || e.code)) || e})。`;
+    }
+  });
+  $('loadJson').addEventListener('click', () => $('jsonFile').click());
+  async function readFile(file) {
+    if (!file) return;
+    if (file.size > 100000) { $('status').className = 'status warn'; $('status').textContent = 'ファイルが大きすぎます。この画面で保存した JSON を選んでください。'; return; }
+    loadSettings(await file.text(), file.name);
+  }
+  $('jsonFile').addEventListener('change', (e) => { readFile(e.target.files[0]); e.target.value = ''; });
+  {
+    const box = $('settings');
+    box.addEventListener('dragover', (e) => { e.preventDefault(); box.classList.add('drop'); });
+    box.addEventListener('dragleave', () => box.classList.remove('drop'));
+    box.addEventListener('drop', (e) => { e.preventDefault(); box.classList.remove('drop'); readFile(e.dataTransfer.files[0]); });
+  }
+  $('copyCode').addEventListener('click', async () => {
+    writeHash();
+    const code = encodeCode(stateQuery());
+    $('code').value = code;
+    const s = $('status');
+    s.className = 'status';
+    try { await navigator.clipboard.writeText(code); s.textContent = '設定コードをコピーしました。この欄に貼るとこのペンに戻ります。'; }
+    catch (e) { $('code').select(); s.textContent = 'コードを選択しました。コピーしてください。'; }
+  });
+  $('applyCode').addEventListener('click', () => {
+    const ok = loadSettings($('code').value, '設定コード');
+    $('code').classList.toggle('bad', !ok);
+  });
+  // 貼り付けたものだけを読む(欄に残っていたコードと混ざらないように)
+  $('code').addEventListener('paste', (e) => {
+    const text = e.clipboardData && e.clipboardData.getData('text');
+    if (!text) return;
+    e.preventDefault();
+    $('code').value = text.trim();
+    const ok = loadSettings(text, '設定コード');
+    $('code').classList.toggle('bad', !ok);
+    if (ok) $('code').value = encodeCode(stateQuery());
+  });
+  $('code').addEventListener('focus', () => $('code').select());
+  $('code').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); $('applyCode').click(); }
+  });
+
   $('share').addEventListener('click', async () => {
     writeHash();
     const s = $('status');
@@ -793,13 +923,7 @@
     try {
       const blob = await makeCard();
       const name = fileBase() + '-card.png';
-      if (window.claude && typeof window.claude.use === 'function') {
-        const dl = await window.claude.use('downloads');
-        if (dl) { await dl.save({ filename: name, data: blob }); s.textContent = `${name} を保存しました。`; return; }
-      }
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a'); a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove();
-      setTimeout(() => URL.revokeObjectURL(url), 4000);
+      await saveBlob(blob, name);
       s.textContent = `${name} を保存しました。`;
     } catch (e) {
       s.className = 'status warn';
@@ -807,6 +931,16 @@
     }
   });
 
+  // PNG や JSON をそのまま保存する(claude.ai の中では downloads 機能を使う)
+  async function saveBlob(blob, name) {
+    if (window.claude && typeof window.claude.use === 'function') {
+      const dl = await window.claude.use('downloads');
+      if (dl) { await dl.save({ filename: name, data: blob }); return; }
+    }
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 4000);
+  }
   function fileBase() { return 'this-is-a-pen' + (presetKey ? '-' + presetKey : ''); }
   async function exportBuild(b, name, done) {
     const s = $('status');
