@@ -645,8 +645,8 @@
     return true;
   }
 
-  // ---- 設定の保存と読み込み: JSON ファイルと、コピペできる設定コード ----
-  // 設定コードは数値を決まった順に _ でつないだもの。例: PEN1_hex_poly_6_6_1_0_1_0.5_0.5_0_12_14_0.8_9_4_0.3_flush_0
+  // ---- 設定の保存と読み込み: JSON ファイルと、コピペできるシード値 ----
+  // シード値は数値を決まった順に _ でつないだもの。例: PEN1_hex_poly_6_6_1_0_1_0.5_0.5_0_12_14_0.8_9_4_0.3_flush_0
   const CODE_KEYS = ['m', 'sec', 'ps', 'pe', 'pd', 'w', 'wd', 'ww', 'wp', 'tw', 'od', 'nl', 'fd', 'c', 'e', 'cl', 'cs', 'fl'];
   function encodeCode(q) {
     return ['PEN1'].concat(CODE_KEYS.map((k) => (k === 'fl' ? (q.get('fl') === '1' ? '1' : '0') : q.get(k) || '-'))).join('_');
@@ -665,7 +665,7 @@
     let q;
     if (m) {
       const v = m[0].split('_').slice(1);
-      if (v.length !== CODE_KEYS.length) throw new Error('コードが途中で切れているようです');
+      if (v.length !== CODE_KEYS.length) throw new Error('シード値が途中で切れているようです');
       q = new URLSearchParams();
       CODE_KEYS.forEach((k, i) => { if (v[i] !== '-') q.set(k, v[i]); });
     } else q = new URLSearchParams(t.includes('#') ? t.slice(t.indexOf('#') + 1) : t);
@@ -728,11 +728,11 @@
     $('code').value = code;
     const s = $('status');
     s.className = 'status';
-    try { await navigator.clipboard.writeText(code); s.textContent = '設定コードをコピーしました。この欄に貼るとこのペンに戻ります。'; }
+    try { await navigator.clipboard.writeText(code); s.textContent = 'シード値をコピーしました。この欄に貼るとこのペンに戻ります。'; }
     catch (e) { $('code').select(); s.textContent = 'コードを選択しました。コピーしてください。'; }
   });
   $('applyCode').addEventListener('click', () => {
-    const ok = loadSettings($('code').value, '設定コード');
+    const ok = loadSettings($('code').value, 'シード値');
     $('code').classList.toggle('bad', !ok);
   });
   // 貼り付けたものだけを読む(欄に残っていたコードと混ざらないように)
@@ -741,7 +741,7 @@
     if (!text) return;
     e.preventDefault();
     $('code').value = text.trim();
-    const ok = loadSettings(text, '設定コード');
+    const ok = loadSettings(text, 'シード値');
     $('code').classList.toggle('bad', !ok);
     if (ok) $('code').value = encodeCode(stateQuery());
   });
